@@ -504,6 +504,25 @@ const C15_DEFAULTS = {
 
 const C15_PRESETS: { id: string; name: string; hint: string; patch: Partial<TraderConfig> }[] = [
   {
+    id: 'data-tuned', name: '★ Data-Tuned (model-confirmed)',
+    hint: 'Tuned on 9,695 settled 15-min markets and 1,293 real fills (Oct 18 – Nov 11 2026). Buys a side only when the settlement model is ≥99% sure AND the ask still leaves ≥3¢ after fees (2¢ + the ~1¢ real fills ran above the displayed ask), any time from 13 to 1 minutes left, never above 97¢. Final-minute entries are OFF (too few samples, model overconfident there). Sized at 2% of balance, max 2 coins at once because losses cluster across coins. Replay: 159 entries, 96.9% wins at ~93¢, about +2.7¢/contract after fees and slippage — but the most recent third of the data was negative, so this is NOT a proven edge. Paper-trade it first.',
+    patch: {
+      crypto15mDirectionalEnabled: true, crypto15mPairsEnabled: false, crypto15mUseRules: false,
+      crypto15mDirectionMode: 'model',
+      crypto15mModelMinProb: 0.99, crypto15mModelMinEdgeCents: 3,
+      crypto15mModelMidwindow: true, crypto15mModelFinalMinute: false,
+      crypto15mModelAutopause: true,
+      crypto15mTimeDelayMin: 13, crypto15mEntryMax: 0.97,
+      crypto15mEntryStyle: 'taker', crypto15mEntryDiff: 0.01,
+      crypto15mExitThreshold: 0.4, crypto15mStopSlippageCents: 2,
+      crypto15mTakeProfitCents: 0, crypto15mStopLossPct: 0,
+      crypto15mSizingMode: 'balance_pct', crypto15mBalancePct: 0.02,
+      crypto15mMaxLossPct: 0.02, crypto15mMaxTotalPct: 0.06, crypto15mMaxConcurrent: 2,
+      crypto15mHoursStartUtc: 0, crypto15mHoursEndUtc: 24,
+      crypto15mIndicatorDetect: true, crypto15mSpotWs: true,
+    },
+  },
+  {
     id: 'sniper', name: '★ Settlement Sniper',
     hint: 'The one mechanism that survived this app\'s 19,819-window historical replay: enter ONLY inside the final 60s, when ≥30 of the 60 settlement prints are already in, the model is ~3σ certain, and the quote still leaves ≥2¢ net of fees. Rare entries by design (a few per day across coins). Tail losses are real — paper-trade first, size small.',
     patch: {

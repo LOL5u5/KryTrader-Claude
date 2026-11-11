@@ -206,6 +206,50 @@ DEFAULT_CONFIG: dict[str, Any] = {
 
 CRYPTO15M_PRESETS: list[dict[str, Any]] = [
     {
+        "id": "c15-data-tuned",
+        "name": "★ Data-Tuned (model-confirmed)",
+        "tagline": "Model >=99% sure and >=3c left after fees, 13 to 1 minutes out.",
+        "description": (
+            "Tuned on 9,695 settled 15-minute markets and 1,293 real fills "
+            "(2026-10-18 to 2026-11-11). Buys a side only when the settlement "
+            "model is >=99% sure AND the ask still leaves >=3c net of fees "
+            "(2c plus the ~1c real fills ran above the displayed ask), from "
+            "13 down to 1 minutes left, never above 97c. Final-minute entries "
+            "are off (too few samples; the model was overconfident there). "
+            "2% of balance per entry, max 2 coins at once because losses "
+            "cluster across coins. Replay: 159 entries, 96.9% wins at ~93c, "
+            "about +2.7c/contract after fees and 1c slippage; the most "
+            "recent third of the data was negative. NOT a proven edge - "
+            "paper-trade first."
+        ),
+        "config": {
+            "crypto15m_direction_mode": "model",
+            "crypto15m_model_min_prob": 0.99,
+            "crypto15m_model_min_edge_cents": 3.0,
+            "crypto15m_model_midwindow": True,
+            "crypto15m_model_final_minute": False,
+            "crypto15m_model_autopause": True,
+            "crypto15m_time_delay_min": 13.0,
+            "crypto15m_entry_max": 0.97,
+            "crypto15m_entry_style": "taker",
+            "crypto15m_entry_diff": 0.01,
+            "crypto15m_exit_threshold": 0.40,
+            "crypto15m_stop_slippage_cents": 2,
+            "crypto15m_take_profit_cents": 0,
+            "crypto15m_stop_loss_pct": 0.0,
+            "crypto15m_sizing_mode": "balance_pct",
+            "crypto15m_balance_pct": 0.02,
+            "crypto15m_max_loss_pct": 0.02,
+            "crypto15m_max_total_pct": 0.06,
+            "crypto15m_max_concurrent": 2,
+            "crypto15m_hours_start_utc": 0,
+            "crypto15m_hours_end_utc": 24,
+            "crypto15m_indicator_detect": True,
+            "crypto15m_spot_ws": True,
+            "crypto15m_use_rules": False,
+        },
+    },
+    {
         "id": "c15-sniper",
         "name": "★ Settlement Sniper",
         "tagline": "Final-minute only: strike while the settlement average is being computed.",

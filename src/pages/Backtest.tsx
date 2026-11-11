@@ -15,6 +15,15 @@ type Engine = 'crypto15m' | 'main';
 const C15_STRATS: { id: string; name: string; patch: Partial<TraderConfig> }[] = [
   { id: 'current', name: 'My current settings', patch: {} },
   {
+    id: 'data-tuned', name: 'Data-Tuned (model-confirmed)',
+    patch: {
+      crypto15mDirectionMode: 'model', crypto15mUseRules: false,
+      crypto15mModelMinProb: 0.99, crypto15mModelMinEdgeCents: 3,
+      crypto15mModelMidwindow: true, crypto15mModelFinalMinute: false,
+      crypto15mTimeDelayMin: 13, crypto15mEntryMax: 0.97,
+    },
+  },
+  {
     id: 'sniper', name: 'Settlement Sniper',
     patch: {
       crypto15mDirectionMode: 'model', crypto15mUseRules: false,
