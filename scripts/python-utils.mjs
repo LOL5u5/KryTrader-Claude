@@ -46,6 +46,23 @@ export function tryCmd(cmd, args) {
 let _systemPy = null;
 export function findSystemPython() {
   if (_systemPy) return _systemPy;
+  // Prefer an explicitly chosen interpreter: KRYPT_PYTHON, or the one
+  // actions/setup-python exports as pythonLocation. On Windows the `py`
+  // launcher ignores setup-python and picks the NEWEST Python on the
+  // machine, so a CI job that asked for 3.11 could silently build the
+  // frozen backend on a brand-new release whose wheels PyInstaller cannot
+  // bundle yet (cryptography's `_rust` then fails to load in the selftest).
+  const pinned = [
+    process.env.KRYPT_PYTHON,
+    process.env.pythonLocation
+      && join(process.env.pythonLocation, isWin ? 'python.exe' : join('bin', 'python')),
+  ];
+  for (const exe of pinned) {
+    if (exe && existsSync(exe) && tryCmd(exe, ['--version'])) {
+      _systemPy = exe;
+      return _systemPy;
+    }
+  }
   const candidates = isWin
     ? [
         { cmd: 'py', args: ['-3', '--version'], spawnAs: 'py' },
@@ -74,7 +91,7 @@ export function systemPyPrefix() {
 export function ensureVenv({ force = false } = {}) {
   if (!existsSync(VENV) || force) {
     const sys = findSystemPython();
-    console.log('>> Creating Python venv at python/.venv');
+    console.log(`>> Creating Python venv at python/.venv (interpreter: ${sys})`);
     run(sys, [...systemPyPrefix(), '-m', 'venv', '.venv']);
   }
   if (!existsSync(VENV_PY)) {

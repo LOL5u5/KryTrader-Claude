@@ -8,6 +8,14 @@ ensureVenv();
 console.log('>> Installing PyInstaller');
 run(VENV_PY, ['-m', 'pip', 'install', 'pyinstaller>=6.6,<7', '--disable-pip-version-check']);
 
+console.log('>> Build toolchain versions');
+run(VENV_PY, ['-c', [
+  'import sys, cryptography, PyInstaller',
+  'print("python", sys.version)',
+  'print("cryptography", cryptography.__version__)',
+  'print("pyinstaller", PyInstaller.__version__)',
+].join('; ')]);
+
 console.log('>> Cleaning previous build');
 for (const d of ['build', 'dist']) {
   const p = join(PY_DIR, d);
