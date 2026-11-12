@@ -125,6 +125,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "script_max_open": 2,
     "script_daily_loss_usd": 25.0,
     "script_max_enabled": 10,
+    "script_ask_ttl_sec": 20.0,
 
     "remote_discord_enabled": False,
     "remote_telegram_enabled": False,
@@ -675,6 +676,8 @@ def _validate_config(cfg: dict[str, Any]) -> dict[str, Any]:
     cfg["script_max_contracts"] = _clampi(
         cfg.get("script_max_contracts"), 1, 10_000, d["script_max_contracts"])
     cfg["script_max_open"] = _clampi(cfg.get("script_max_open"), 1, 100, d["script_max_open"])
+    cfg["script_ask_ttl_sec"] = _clampf(
+        cfg.get("script_ask_ttl_sec"), 0.0, 900.0, d["script_ask_ttl_sec"])
     cfg["script_daily_loss_usd"] = _clampf(
         cfg.get("script_daily_loss_usd"), 0.0, 1e6, d["script_daily_loss_usd"])
     cfg["script_max_enabled"] = _clampi(

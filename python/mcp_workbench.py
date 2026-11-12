@@ -81,7 +81,7 @@ LIVE = frozenset({
     "crypto15m_order_size", "crypto15m_sizing_mode", "crypto15m_max_concurrent",
     "crypto15m_session_take_profit_usd", "crypto15m_stop_loss_pct",
     "script_daily_loss_usd", "script_max_contracts", "script_max_entry_cents",
-    "script_max_open", "script_max_enabled",
+    "script_max_open", "script_max_enabled", "script_ask_ttl_sec",
     "perps_farm_daily_loss_usd", "perps_farm_daily_volume_usd",
     "perps_farm_max_inventory_contracts", "perps_farm_clip_contracts",
 })

@@ -306,6 +306,7 @@ def _blank_asset(entry: dict, spot: Optional[float], error: Optional[str] = None
         "strikeUsd": None, "deltaSignedPct": None, "sigma1m": None,
         "modelProb": None, "edgeNetCents": None,
         "settlePrints": 0,
+        "quoteSource": None, "quoteAgeSec": None,
     }
 
 
@@ -497,6 +498,7 @@ async def _asset_snapshot(entry: dict, spot: Optional[float], cfg: dict, now_epo
     candidates.sort(key=lambda x: x[0])
     close_epoch, m = candidates[0]
 
+    quote_source, quote_age = "rest", None
     wsq = kalshi_ws.ticker_quote(m.get("ticker") or "")
     if wsq:
         ts_ms = float(wsq.get("ts_ms") or 0)
@@ -504,6 +506,8 @@ async def _asset_snapshot(entry: dict, spot: Optional[float], cfg: dict, now_epo
             yb, ya = wsq.get("yes_bid_cents"), wsq.get("yes_ask_cents")
             lp = wsq.get("last_cents")
             if yb is not None:
+                quote_source = "ws"
+                quote_age = round(max(0.0, now_epoch - ts_ms / 1000.0), 2)
                 m = dict(m)
                 m["yes_bid_dollars"] = yb / 100.0
                 m["no_ask_dollars"] = (100 - yb) / 100.0
@@ -567,6 +571,8 @@ async def _asset_snapshot(entry: dict, spot: Optional[float], cfg: dict, now_epo
         "inWindow": in_window, "signal": signal, "hourUtc": hour_utc,
     })
 
+    out["quoteSource"] = quote_source
+    out["quoteAgeSec"] = quote_age
     out["upAsk"] = round(yes_ask, 4) if yes_ask else None
     out["downAsk"] = round(no_ask, 4) if no_ask else None
 

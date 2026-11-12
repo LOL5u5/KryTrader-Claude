@@ -11,7 +11,8 @@ import db as dbmod
 import replay
 import script_sandbox
 
-LIVE_ONLY_FIELDS = ("peersAgree", "marketBias", "arbEdgeCents")
+LIVE_ONLY_FIELDS = ("peersAgree", "marketBias", "arbEdgeCents",
+                    "quoteSource", "quoteAgeSec")
 
 FIELD_DOCS: dict[str, str] = {
     "asset": "str — coin symbol: BTC, ETH, SOL, XRP, DOGE, HYPE or BNB",
@@ -58,6 +59,8 @@ FIELD_DOCS: dict[str, str] = {
     "peersAgree": "float|None — fraction of other coins whose favorite points the same way",
     "marketBias": "float|None — snapshot-wide up-bias across coins",
     "arbEdgeCents": "float|None — up+down combined-ask arb edge, cents",
+    "quoteSource": "str|None — where this tick's bid/ask came from: 'ws' (live websocket quote) or 'rest' (Kalshi's market list, which can lag by seconds — typical for the first moments of a new window)",
+    "quoteAgeSec": "float|None — age of the websocket quote in seconds (None when quoteSource is 'rest')",
 }
 
 CONTRACT_DOC = '''\
@@ -95,13 +98,21 @@ Winning contracts settle at $1.00, losing at $0.00. Kalshi taker fee per
 contract: 0.07 x P x (1 - P) dollars at price P (~1.7c at 50c, ~0.7c at
 90c), and the per-ORDER fee is rounded UP to the next cent — small orders
 pay proportionally more.
-At most ONE position per market window per script — after your first intent
-in a window (even one refused by the rails) that window is consumed.
+At most ONE position per market window per script — after your first order
+in a window that window is consumed. A "price": "ask" intent is submitted
+one cent above the ask but never above the entry-price cap; if the ask
+itself is above the cap nothing is sent and the window is NOT consumed, so
+decide() is asked again on the next tick. An "ask" order that has not
+filled within script_ask_ttl_sec (default 20s) is cancelled. An integer
+price above the cap is refused and does consume the window.
 
 ctx["portfolio"] is always present: {"balanceUsd" (None in backtests),
 "openCount", "openPositions" (list of this script's open position dicts),
+"openCostUsd" (worst-case dollars committed to those open positions),
 "todayPnlUsd"} — use it for "stop after -$10 today" / "size down when busy"
-logic.
+logic. Live, it is refreshed after every order, so the next coin in the
+same tick sees the order just placed. Position dicts carry both
+"avgEntryCents" and "costCents" (same number) live and in backtests.
 
 OPTIONAL HOOKS (define any subset; a script must define at least one of
 decide / manage / decide_signal / supervise):

@@ -301,6 +301,7 @@ def run(cfg: dict, code: str, *, trusted: bool = False,
     script_error: Optional[str] = None
     rejected_intents = 0
     rail_refusals = 0
+    rail_skips = 0
     partial = False
     trades: list[dict] = []
     n_windows = 0
@@ -332,6 +333,7 @@ def run(cfg: dict, code: str, *, trusted: bool = False,
             day = str(t.get("observed_at") or "")[:10]
             portfolio = {
                 "balanceUsd": None, "openCount": 0, "openPositions": [],
+                "openCostUsd": 0.0,
                 "todayPnlUsd": round(day_pnl.get(day, 0.0), 4),
                 "totalPnlUsd": round(run_pnl, 4),
             }
@@ -363,9 +365,11 @@ def run(cfg: dict, code: str, *, trusted: bool = False,
                 if ask_cents > limit_c:
                     continue
             if (intent["price"] == "ask"
-                    and int(round(ask_cents)) + 1 > max_entry_cents):
-                rail_refusals += 1
-                break
+                    and int(round(ask_cents)) > max_entry_cents):
+                # Live skips this tick without using up the window and looks
+                # again on the next one, so the replay does the same.
+                rail_skips += 1
+                continue
             cost, fill_idx = float(ask), i
             size = min(int(intent.get("size") or contracts), max_contracts)
             fee = bt.kalshi_fee_per_contract(cost, contracts=size)
@@ -389,6 +393,8 @@ def run(cfg: dict, code: str, *, trusted: bool = False,
             pos_lite = {
                 "ticker": ticker, "asset": asset.get("asset"), "side": side,
                 "costCents": round(cost * 100, 1), "contracts": size,
+                # Same name the live engine uses, so one script reads either.
+                "avgEntryCents": round(cost * 100, 1),
                 "won": bool(won), "pnlUsd": round(pnl_ct * size, 4),
                 "exitReason": exit_reason, "reason": intent.get("reason"),
             }
@@ -437,6 +443,11 @@ def run(cfg: dict, code: str, *, trusted: bool = False,
             f"{rejected_intents} intent(s) were malformed and skipped — see the "
             "script log for the first few reasons."
         ))
+    if rail_skips:
+        caveats.insert(0, (
+            f"{rail_skips} tick(s) skipped because the ask was above "
+            f"script_max_entry_cents={max_entry_cents}c — live skips them too "
+            "and keeps looking for the rest of the window."))
     if rail_refusals:
         caveats.append(
             f"{rail_refusals} entr(y/ies) refused by the safety rails "

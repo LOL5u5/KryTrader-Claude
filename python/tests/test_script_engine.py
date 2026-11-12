@@ -352,16 +352,127 @@ def _bt_run(monkeypatch, ask, cfg):
                                since_days=7)
 
 
-def test_backtest_refuses_cap_boundary_ask_like_live(fresh_db, cfg, monkeypatch):
-    """Live submits ask intents at round(ask)+1 and refuses >cap — an ask of
-    96.8c under the default 97c cap is refused live, so the backtest must not
-    show it as a fill (it did: users backtested 97c-favorite scripts into
-    phantom profits)."""
-    out = _bt_run(monkeypatch, ask=0.968, cfg=cfg)
+def test_backtest_skips_ask_above_cap_like_live(fresh_db, cfg, monkeypatch):
+    """Live sends an ask intent at min(cap, ask+1c) and sends nothing when
+    the ask itself is above the cap, so the backtest must not show an
+    above-cap ask as a fill (users once backtested 98c-favorite scripts
+    into phantom profits)."""
+    out = _bt_run(monkeypatch, ask=0.98, cfg=cfg)
     assert out["n"] == 0
-    assert any("refused by the safety rails" in c for c in out["caveats"])
+    assert any("skipped because the ask was above" in c for c in out["caveats"])
+
+
+def test_backtest_fills_ask_at_the_cap_like_live(fresh_db, cfg, monkeypatch):
+    """An ask that rounds to the cap is buyable live (the order goes in AT
+    the cap), so the backtest fills it too."""
+    out = _bt_run(monkeypatch, ask=0.968, cfg=cfg)
+    assert out["n"] == 1
 
 
 def test_backtest_fills_below_cap_band(fresh_db, cfg, monkeypatch):
     out = _bt_run(monkeypatch, ask=0.90, cfg=cfg)
     assert out["n"] == 1
+
+
+def _rail_asset(ask, ticker="KXBTC15M-RAIL"):
+    close = (datetime.now(timezone.utc) + timedelta(minutes=5)).strftime(
+        "%Y-%m-%dT%H:%M:%SZ")
+    return {"asset": "BTC", "series": "KXBTC15M", "ticker": ticker,
+            "closeTime": close, "upAsk": ask, "downAsk": None,
+            "favoritePrice": ask}
+
+
+def _place_paper(cfg, ask, price="ask", ticker="KXBTC15M-RAIL"):
+    return run_async(se._place_intent(
+        {"id": "s1"}, _rail_asset(ask, ticker),
+        {"side": "up", "price": price, "size": 5}, cfg, "paper", paper=True))
+
+
+def test_ask_above_cap_skips_without_burning_the_window(fresh_db, cfg):
+    """An ask over the rail sends nothing and leaves the window open, so the
+    script is asked again when the ask comes back under the cap."""
+    assert _place_paper(cfg, 0.98) is None
+    with db.get_db() as conn:
+        assert not se._already_attempted(conn, "s1", "KXBTC15M-RAIL", "paper")
+
+
+def test_ask_at_cap_is_submitted_at_the_cap(fresh_db, cfg):
+    row = _place_paper(cfg, 0.97)
+    assert row is not None and row["entry_limit_cents"] == 97
+
+
+def test_ask_below_cap_gets_one_cent_of_room(fresh_db, cfg):
+    row = _place_paper(cfg, 0.93)
+    assert row["entry_limit_cents"] == 94
+
+
+def test_explicit_price_above_cap_is_still_refused(fresh_db, cfg):
+    assert _place_paper(cfg, 0.90, price=98) is None
+    with db.get_db() as conn:
+        assert se._already_attempted(conn, "s1", "KXBTC15M-RAIL", "paper")
+
+
+def test_ask_entry_carries_a_time_limit_and_resting_price_does_not(fresh_db, cfg):
+    ask_row = _place_paper(cfg, 0.93, ticker="KXBTC15M-A")
+    rest_row = _place_paper(cfg, 0.93, price=90, ticker="KXBTC15M-B")
+    assert crypto15m_trader._script_entry_ttl_sec(ask_row) == 20.0
+    assert crypto15m_trader._script_entry_ttl_sec(rest_row) == 0.0
+    cfg["script_ask_ttl_sec"] = 0
+    off_row = _place_paper(cfg, 0.93, ticker="KXBTC15M-C")
+    assert crypto15m_trader._script_entry_ttl_sec(off_row) == 0.0
+
+
+def test_stale_script_ask_entry_expires_only_past_its_time_limit(fresh_db, cfg):
+    row = dict(_place_paper(cfg, 0.93))
+    assert not crypto15m_trader._pair_entry_stale(row)
+    old = (datetime.now(timezone.utc) - timedelta(seconds=45)).strftime(
+        "%Y-%m-%d %H:%M:%S")
+    assert crypto15m_trader._pair_entry_stale({**row, "created_at": old})
+    no_ttl = {**row, "created_at": old, "mgmt_config": se._SCRIPT_MGMT_SNAPSHOT}
+    assert not crypto15m_trader._pair_entry_stale(no_ttl)
+
+
+def test_committed_usd_uses_target_size_at_the_limit():
+    rows = [{"target_contracts": 20, "filled_contracts": 0, "entry_limit_cents": 95},
+            {"target_contracts": 3, "filled_contracts": 3, "entry_limit_cents": 60}]
+    assert se._committed_usd(rows) == 20.8
+
+
+def test_position_summary_has_both_cost_names():
+    lite = se._pos_lite({"avg_entry_cents": 94.5, "target_contracts": 20,
+                         "entry_limit_cents": 95, "close_time": "x"})
+    assert lite["avgEntryCents"] == lite["costCents"] == 94.5
+    assert lite["targetContracts"] == 20 and lite["limitCents"] == 95
+
+
+def test_portfolio_is_refreshed_between_coins_in_one_tick(fresh_db, cfg, monkeypatch):
+    """The second coin's decide() must see the order placed for the first."""
+    code = (
+        "# krypt-script v1\n# name: Seer\n"
+        "def decide(ctx):\n"
+        "    pf = ctx['portfolio']\n"
+        "    log('%s open=%d cost=%.2f' % (ctx['asset'], pf['openCount'], pf['openCostUsd']))\n"
+        "    return {'side': 'up', 'price': 'ask', 'size': 10}\n"
+    )
+    cfg["scripts_paper_mode"] = True
+    cfg["script_max_open"] = 5
+    with db.get_db() as conn:
+        db.upsert_user_script(conn, {"id": "s1", "name": "Seer", "code": code,
+                                     "enabled": 1, "trusted": 0})
+    a1, a2 = _rail_asset(0.90, "KXBTC15M-P1"), _rail_asset(0.90, "KXETH15M-P2")
+    a2.update(asset="ETH", series="KXETH15M")
+    for a in (a1, a2):
+        a["hasMarket"] = True
+
+    async def fake_snapshot(_cfg):
+        return {"assets": [a1, a2]}
+    monkeypatch.setattr(crypto15m, "snapshot", fake_snapshot)
+    seen = []
+
+    async def fake_drain(sid, mod):
+        seen.extend(mod.drain_logs() if hasattr(mod, "drain_logs") else mod._log_lines)
+    monkeypatch.setattr(se, "_drain_logs", fake_drain)
+    run_async(se.run_tick(cfg, authed=False))
+    text = " | ".join(str(x) for x in seen)
+    assert "BTC open=0 cost=0.00" in text
+    assert "ETH open=1 cost=9.10" in text

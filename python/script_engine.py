@@ -68,13 +68,38 @@ COMPILE_TIMEOUT_S = 5.0
 SANDBOX_TIMEOUT_S = 0.75
 STATE_SAVE_EVERY_S = 60.0
 
-_SCRIPT_MGMT_SNAPSHOT = json.dumps({
+_SCRIPT_MGMT_BASE = {
     "crypto15m_exit_threshold": 0.0,
     "crypto15m_stop_loss_pct": 0.0,
     "crypto15m_take_profit_cents": 0,
     "crypto15m_stop_slippage_cents": 0,
     "crypto15m_entry_style": "taker",
-})
+}
+_SCRIPT_MGMT_SNAPSHOT = json.dumps(_SCRIPT_MGMT_BASE)
+
+
+def _mgmt_snapshot(ttl_sec: float) -> str:
+    """Exit-management snapshot for a script entry. An "ask" intent is meant
+    to fill at once; `script_entry_ttl_sec` tells the manage pass to cancel
+    it if it has not (a marketable limit that rests fills later only when
+    the price comes back, which is when the trade is going against us)."""
+    if ttl_sec <= 0:
+        return _SCRIPT_MGMT_SNAPSHOT
+    return json.dumps({**_SCRIPT_MGMT_BASE, "script_entry_ttl_sec": float(ttl_sec)})
+
+
+def _committed_usd(rows: list[dict]) -> float:
+    """Worst-case dollars tied up in a script's open crypto rows: contracts
+    asked for at the limit price (a filled row cannot have cost more)."""
+    total = 0.0
+    for r in rows:
+        try:
+            n = max(int(r.get("target_contracts") or 0),
+                    int(r.get("filled_contracts") or 0))
+            total += n * float(r.get("entry_limit_cents") or 0) / 100.0
+        except (TypeError, ValueError):
+            continue
+    return round(total, 4)
 
 _compiled: dict[str, script_sandbox.CompiledScript] = {}
 _notified_fill: set[int] = set()
@@ -298,7 +323,18 @@ async def _place_intent(s: dict, a: dict, intent: dict, cfg: dict,
         ask = a.get("upAsk") if side == "up" else a.get("downAsk")
         if not ask or not (0.0 < float(ask) < 1.0):
             return None
-        limit_cents = min(max_cents + 1, int(round(float(ask) * 100)) + 1)
+        ask_cents = int(round(float(ask) * 100))
+        if ask_cents > max_cents:
+            # Nothing to buy inside the rail right now. Skip WITHOUT marking
+            # the window attempted: the ask can come back under the cap
+            # later in the same window, and a refusal row used to burn it.
+            logger.debug(
+                f"[scripts] {sid[:8]} skip {a.get('asset')}: ask {ask_cents}c "
+                f"> script_max_entry_cents {max_cents}c")
+            return None
+        # ask+1c of room to cross, but never above the rail: at an ask equal
+        # to the cap the order goes in AT the cap, still marketable.
+        limit_cents = min(max_cents, ask_cents + 1)
     else:
         limit_cents = int(intent["price"])
 
@@ -328,7 +364,10 @@ async def _place_intent(s: dict, a: dict, intent: dict, cfg: dict,
         "kalshi_env": env, "strategy": f"script:{sid[:8]}", "script_id": sid,
         "tp_pct": intent.get("take_profit_pct"),
         "sl_cents": intent.get("stop_loss_cents"),
-        "mgmt_config": _SCRIPT_MGMT_SNAPSHOT,
+        "mgmt_config": (
+            _mgmt_snapshot(float(cfg.get("script_ask_ttl_sec") or 0.0))
+            if intent["price"] == "ask" else _SCRIPT_MGMT_SNAPSHOT
+        ),
     }
 
     if paper:
@@ -391,6 +430,11 @@ def _pos_lite(r: dict) -> dict:
         "id": r.get("id"), "ticker": r.get("ticker"), "asset": r.get("asset"),
         "side": r.get("side"), "contracts": r.get("filled_contracts") or 0,
         "avgEntryCents": r.get("avg_entry_cents"),
+        # Same name the backtester uses, so one script reads either.
+        "costCents": r.get("avg_entry_cents"),
+        "targetContracts": r.get("target_contracts") or 0,
+        "limitCents": r.get("entry_limit_cents"),
+        "closeTime": r.get("close_time"),
         "status": r.get("status"), "pnlUsd": r.get("pnl_usd"),
         "exitReason": r.get("exit_reason"), "won": r.get("outcome_correct"),
     }
@@ -826,6 +870,7 @@ async def run_tick(cfg: dict, *, authed: bool) -> None:
             "balanceUsd": balance_usd,
             "openCount": open_count,
             "openPositions": [_pos_lite(p) for p in open_crypto],
+            "openCostUsd": _committed_usd(open_crypto),
             "todayPnlUsd": round(day_pnl, 2),
         }
 
@@ -880,6 +925,15 @@ async def run_tick(cfg: dict, *, authed: bool) -> None:
                     continue
                 if placed is not None:
                     open_count += 1
+                    # Keep the snapshot the NEXT coin's decide() sees honest:
+                    # it used to stay frozen for the whole tick, so a script
+                    # sizing against its open exposure could not see the
+                    # order it had placed a moment earlier.
+                    if placed.get("status") not in ("error", "canceled"):
+                        portfolio["openCount"] = open_count
+                        portfolio["openPositions"].append(_pos_lite(placed))
+                        portfolio["openCostUsd"] = round(
+                            portfolio["openCostUsd"] + _committed_usd([placed]), 4)
         if died:
             await _drain_logs(sid, mod)
             continue

@@ -1053,15 +1053,30 @@ _PAIR_ENTRY_TTL_SEC = 30.0
 _MARKETABLE_STRATEGIES = ("pair", "model", "model_fm")
 
 
+def _script_entry_ttl_sec(pos: dict) -> float:
+    """Seconds a script's "buy at ask" entry may rest before it is cancelled
+    (0 = no limit). Stamped on the row at entry by the script engine."""
+    raw = pos.get("mgmt_config")
+    if not raw or "script_entry_ttl_sec" not in str(raw):
+        return 0.0
+    try:
+        return max(0.0, float(json.loads(raw).get("script_entry_ttl_sec") or 0.0))
+    except (TypeError, ValueError, AttributeError):
+        return 0.0
+
+
 def _pair_entry_stale(pos: dict) -> bool:
+    ttl = _PAIR_ENTRY_TTL_SEC
     if (pos.get("strategy") or "") not in _MARKETABLE_STRATEGIES:
-        return False
+        ttl = _script_entry_ttl_sec(pos)
+        if ttl <= 0:
+            return False
     ca = str(pos.get("created_at") or "")
     try:
         dt = datetime.strptime(ca[:19], "%Y-%m-%d %H:%M:%S").replace(tzinfo=timezone.utc)
     except ValueError:
         return False
-    return (datetime.now(timezone.utc) - dt).total_seconds() > _PAIR_ENTRY_TTL_SEC
+    return (datetime.now(timezone.utc) - dt).total_seconds() > ttl
 
 
 async def _protect_partial_entry(pos: dict, cfg: dict) -> Optional[dict]:
