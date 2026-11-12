@@ -28,7 +28,7 @@ console.log('>> Running PyInstaller (this takes ~60s)');
 run(VENV_PY, [
   '-m', 'PyInstaller',
   '--noconfirm',
-  '--name', 'krypt-trader-backend',
+  '--name', 'krypt-trader-tuned-backend',
   '--console',
   '--hidden-import', 'db',
   '--hidden-import', 'scanner',
@@ -97,14 +97,14 @@ run(VENV_PY, [
   'service.py',
 ]);
 
-const out = join(PY_DIR, 'dist', 'krypt-trader-backend');
+const out = join(PY_DIR, 'dist', 'krypt-trader-tuned-backend');
 if (!existsSync(out)) {
   console.error('!! PyInstaller did not produce', out);
   process.exit(1);
 }
 const exe = join(out, process.platform === 'win32'
-  ? 'krypt-trader-backend.exe'
-  : 'krypt-trader-backend');
+  ? 'krypt-trader-tuned-backend.exe'
+  : 'krypt-trader-tuned-backend');
 console.log('>> Selftest: verifying the frozen bundle imports + has CA roots');
 const st = spawnSync(exe, ['--selftest'], { stdio: 'inherit', windowsHide: true });
 if (st.error) {
@@ -121,4 +121,4 @@ if (st.status !== 0) {
   process.exit(1);
 }
 
-console.log('>> OK — backend bundled + selftest PASSED at python/dist/krypt-trader-backend');
+console.log('>> OK — backend bundled + selftest PASSED at python/dist/krypt-trader-tuned-backend');

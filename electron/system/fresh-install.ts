@@ -5,8 +5,8 @@ import { dirname, join } from 'node:path';
 import { appendLog } from '../ipc';
 
 
-const APP_EXE = 'Krypt Trader.exe';
-const BACKEND_EXE = 'krypt-trader-backend.exe';
+const APP_EXE = 'Krypt Trader Tuned.exe';
+const BACKEND_EXE = 'krypt-trader-tuned-backend.exe';
 
 function enabled(): boolean {
   return app.isPackaged || process.env.KRYPT_FRESH_INSTALL_FORCE === '1';
@@ -87,7 +87,7 @@ export function takeOverOtherInstances(): number {
       killed++;
     }
     if (killed > 0) {
-      log('INFO', `took over from ${killed} stale Krypt Trader process(es) from another install`);
+      log('INFO', `took over from ${killed} stale Krypt Trader Tuned process(es) from another install`);
     }
   } catch (e: any) {
     log('WARNING', `instance takeover failed (non-fatal): ${e?.message || e}`);

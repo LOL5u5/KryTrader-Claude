@@ -189,8 +189,8 @@ class PythonBackend {
       const base = join(process.resourcesPath, 'python');
       const exe =
         process.platform === 'win32'
-          ? join(base, 'krypt-trader-backend.exe')
-          : join(base, 'krypt-trader-backend');
+          ? join(base, 'krypt-trader-tuned-backend.exe')
+          : join(base, 'krypt-trader-tuned-backend');
       if (existsSync(exe)) {
         prepareDarwinBackend(base, exe);
         return { cmd: exe, args: [], cwd: base };

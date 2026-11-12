@@ -19,7 +19,7 @@ process.env.VITE_PUBLIC = app.isPackaged
   : join(__dirname, '..', 'public');
 
 if (process.platform === 'win32') {
-  app.setAppUserModelId('cc.krypt.trader');
+  app.setAppUserModelId('cc.krypt.trader.tuned');
 }
 
 let mainWindow: BrowserWindow | null = null;
@@ -385,7 +385,7 @@ async function toggleTradingFromTray(): Promise<void> {
         msg: `tray toggle: ${msg}`,
       });
       if (Notification.isSupported()) {
-        new Notification({ title: 'Krypt Trader', body: msg }).show();
+        new Notification({ title: 'Krypt Trader Tuned', body: msg }).show();
       }
     }
   }

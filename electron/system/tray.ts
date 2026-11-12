@@ -45,7 +45,7 @@ export function installTray(handlers: TrayHandlers): Tray {
   const img = trayImage();
   tray = new Tray(img.isEmpty() ? nativeImage.createEmpty() : img);
   if (img.isEmpty() && process.platform === 'darwin') tray.setTitle('KT');
-  tray.setToolTip('Krypt Trader — still running. Right-click → Quit to stop it.');
+  tray.setToolTip('Krypt Trader Tuned — still running. Right-click → Quit to stop it.');
   tray.on('click', () => handlers.openWindow());
   tray.on('double-click', () => handlers.openWindow());
   rebuild(handlers);
@@ -56,14 +56,14 @@ export function rebuild(handlers: TrayHandlers): void {
   if (!tray) return;
   const trading = handlers.isTrading();
   const menu = Menu.buildFromTemplate([
-    { label: 'Open Krypt Trader', click: () => handlers.openWindow() },
+    { label: 'Open Krypt Trader Tuned', click: () => handlers.openWindow() },
     { type: 'separator' },
     {
       label: trayTradingLabel(trading, handlers.isLive()),
       click: () => handlers.toggleTrading(),
     },
     { type: 'separator' },
-    { label: 'Quit Krypt Trader', click: () => handlers.quit() },
+    { label: 'Quit Krypt Trader Tuned', click: () => handlers.quit() },
   ]);
   tray.setContextMenu(menu);
 }

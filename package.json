@@ -1,6 +1,6 @@
 {
   "name": "krypt-trader",
-  "productName": "Krypt Trader",
+  "productName": "Krypt Trader Tuned",
   "version": "6.4.0",
   "description": "A free desktop app for Kalshi: connect your own AI agent (MCP or HTTP API) to research, forecast and trade, start on Paper (real order books, imaginary money) and go Live only when you choose, plus a manual trading terminal for any market.",
   "main": "dist-electron/main.js",
@@ -72,8 +72,8 @@
     "vitest": "^2.1.9"
   },
   "build": {
-    "appId": "cc.krypt.trader",
-    "productName": "Krypt Trader",
+    "appId": "cc.krypt.trader.tuned",
+    "productName": "Krypt Trader Tuned",
     "files": [
       "dist/**",
       "dist-electron/**",
@@ -81,7 +81,7 @@
     ],
     "extraResources": [
       {
-        "from": "python/dist/krypt-trader-backend",
+        "from": "python/dist/krypt-trader-tuned-backend",
         "to": "python",
         "filter": [
           "**/*"
@@ -131,9 +131,9 @@
       "runAfterFinish": true,
       "installerIcon": "resources/krypt.ico",
       "uninstallerIcon": "resources/krypt.ico",
-      "uninstallDisplayName": "Krypt Trader",
+      "uninstallDisplayName": "Krypt Trader Tuned",
       "include": "build/installer.nsh",
-      "shortcutName": "Krypt Trader"
+      "shortcutName": "Krypt Trader Tuned"
     },
     "publish": null
   }
